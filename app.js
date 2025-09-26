@@ -37,30 +37,27 @@ loadModels();
 app.post("/verify", async (req, res) => {
   const { reg_no, selfieBase64 } = req.body;
 
-  
-  
-
   if (!reg_no || !selfieBase64) {
-    return res.status(400).send("Missing reg_no or selfieBase64");
+    return res.status(400).json({ error: "Missing reg_no or selfieBase64" });
   }
 
   try {
-    // Load selfie image from base64
     const base64Data = selfieBase64.replace(/^data:image\/\w+;base64,/, "");
     const buffer = Buffer.from(base64Data, "base64");
-    const selfieImg = await canvas.loadImage(buffer);    
+    const selfieImg = await canvas.loadImage(buffer);
 
-    // Load user image from Supabase
     const { data, error } = await supabase
       .from("student")
       .select("face_url")
       .eq("reg_no", reg_no)
       .single();
 
-    if (error || !data) return res.status(404).send("User not found");
+    if (error || !data) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
     const dbImg = await canvas.loadImage(data.face_url);
 
-    // Detect faces
     const selfieDetection = await faceapi
       .detectSingleFace(selfieImg, new faceapi.TinyFaceDetectorOptions())
       .withFaceLandmarks()
@@ -71,21 +68,22 @@ app.post("/verify", async (req, res) => {
       .withFaceLandmarks()
       .withFaceDescriptor();
 
-    if (!selfieDetection || !dbDetection)
-      return res.send({ match: false, distance: null });
+    if (!selfieDetection || !dbDetection) {
+      return res.json({ match: false, distance: null });
+    }
 
-    // Compare descriptors
     const distance = faceapi.euclideanDistance(
       selfieDetection.descriptor,
       dbDetection.descriptor
     );
 
-    res.send({ match: distance < 0.5, distance });
+    return res.json({ match: distance < 0.5, distance });
   } catch (err) {
     console.error("Server error:", err);
-    res.status(500).send("Server error");
+    return res.status(500).json({ error: "Server error" });
   }
 });
+
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
