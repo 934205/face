@@ -4,15 +4,13 @@ const { createClient } = require("@supabase/supabase-js");
 const faceapi = require("face-api.js");
 const canvas = require("canvas");
 const fetch = require("node-fetch");
-require("dotenv").config()
-
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" })); // allow large base64 images
 
-const SUPABASE_URL = process.env.SUPABASE_URL
-const SUPABASE_KEY = process.env.SUPABASE_KEY
+const SUPABASE_URL = "https://pslgbarmivjmsqmmupqx.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzbGdiYXJtaXZqbXNxbW11cHF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYzNTkzNzQsImV4cCI6MjA3MTkzNTM3NH0.T48RGwVDJ2GhkGBMzN0FpxmTNrqD-DCX4JNcSJ77u-k";
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Node canvas for face-api.js
@@ -37,27 +35,30 @@ loadModels();
 app.post("/verify", async (req, res) => {
   const { reg_no, selfieBase64 } = req.body;
 
+  
+  
+
   if (!reg_no || !selfieBase64) {
-    return res.status(400).json({ error: "Missing reg_no or selfieBase64" });
+    return res.status(400).send("Missing reg_no or selfieBase64");
   }
 
   try {
+    // Load selfie image from base64
     const base64Data = selfieBase64.replace(/^data:image\/\w+;base64,/, "");
     const buffer = Buffer.from(base64Data, "base64");
-    const selfieImg = await canvas.loadImage(buffer);
+    const selfieImg = await canvas.loadImage(buffer);    
 
+    // Load user image from Supabase
     const { data, error } = await supabase
       .from("student")
       .select("face_url")
       .eq("reg_no", reg_no)
       .single();
 
-    if (error || !data) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
+    if (error || !data) return res.status(404).send("User not found");
     const dbImg = await canvas.loadImage(data.face_url);
 
+    // Detect faces
     const selfieDetection = await faceapi
       .detectSingleFace(selfieImg, new faceapi.TinyFaceDetectorOptions())
       .withFaceLandmarks()
@@ -68,22 +69,22 @@ app.post("/verify", async (req, res) => {
       .withFaceLandmarks()
       .withFaceDescriptor();
 
-    if (!selfieDetection || !dbDetection) {
-      return res.json({ match: false, distance: null });
-    }
+    if (!selfieDetection || !dbDetection)
+      return res.send({ match: false, distance: null });
 
+    // Compare descriptors
     const distance = faceapi.euclideanDistance(
       selfieDetection.descriptor,
       dbDetection.descriptor
     );
 
-    return res.json({ match: distance < 0.5, distance });
+    res.send({ match: distance < 0.5, distance });
   } catch (err) {
     console.error("Server error:", err);
-    return res.status(500).json({ error: "Server error" });
+    res.status(500).send("Server error");
   }
 });
 
+app.listen(5000)
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
