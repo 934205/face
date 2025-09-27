@@ -51,7 +51,7 @@ app.post("/verify", async (req, res) => {
     // Load user image from Supabase
     const { data, error } = await supabase
       .from("student")
-      .select("face_url")
+      .select("name,reg_no,mobile_number,gender,hosteller,face_url")
       .eq("reg_no", reg_no)
       .single();
 
@@ -77,8 +77,13 @@ app.post("/verify", async (req, res) => {
       selfieDetection.descriptor,
       dbDetection.descriptor
     );
+    console.log(data);
+    
 
-    res.send({ match: distance < 0.5, distance });
+    res.json({
+      match:distance < 0.5,distance,student:data
+    })
+    res.send({ match: distance < 0.5, distance, });
   } catch (err) {
     console.error("Server error:", err);
     res.status(500).send("Server error");
